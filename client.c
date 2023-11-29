@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     if(type == 2) {
         int pid = atoi(argv[2]);
         req = (struct request) {
-                VM_AREA, pid
+                PPP_CHAN, pid
         };
         ssize_t err = write(fd, &req, sizeof(struct request));
         if (err < 0) {

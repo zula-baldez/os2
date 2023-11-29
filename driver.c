@@ -10,6 +10,8 @@
 #include <linux/net.h>
 #include <linux/netlink.h>
 #include <linux/if_pppox.h>
+#include <linux/netdevice.h>
+#include <linux/kernel.h>
 
 #define DEBUGFS_DIR "lab_info"
 #define DEBUGFS_VM_FILE "vm"
@@ -58,18 +60,65 @@ struct ppp_area_struct_info_msg {
 struct request request;
 int request_received = 0;
 
-static struct ppp_area_struct_info_msg get_ppp_area_struct_info_msg(void) {
-    struct net *net = get_net_ns_by_pid(request.pid);
+static struct ppp_area_struct_info_msg check_in_net(struct net *net) {
+    pr_info("checking net...");
     if (net == NULL) {
         pr_err("network not found\n");
         return (struct ppp_area_struct_info_msg) {.err = -EINVAL};
     }
-    struct sock *sock = net->diag_nlsk;
-    struct pppox_sock *pppox_sock = pppox_sk(sock);
-    struct ppp_channel ppp = pppox_sock->chan;
-    return (struct ppp_area_struct_info_msg) {
-            ppp.mtu, ppp.hdrlen, ppp.speed, ppp.latency
-    };
+    struct sock *sock = net->rtnl;
+    if (sock && sock->sk_family == PF_PPPOX) {
+        struct pppox_sock *pppox_sock = pppox_sk(sock);
+        struct ppp_channel ppp = pppox_sock->chan;
+        return (struct ppp_area_struct_info_msg) {
+                ppp.mtu, ppp.hdrlen, ppp.speed, ppp.latency
+        };
+    }
+    sock = net->diag_nlsk;
+    if (sock && sock->sk_family == PF_PPPOX) {
+        struct pppox_sock *pppox_sock = pppox_sk(sock);
+        struct ppp_channel ppp = pppox_sock->chan;
+        return (struct ppp_area_struct_info_msg) {
+                ppp.mtu, ppp.hdrlen, ppp.speed, ppp.latency
+        };
+    }
+
+    sock = net->crypto_nlsk;
+    if (sock && sock->sk_family == PF_PPPOX) {
+        struct pppox_sock *pppox_sock = pppox_sk(sock);
+        struct ppp_channel ppp = pppox_sock->chan;
+        return (struct ppp_area_struct_info_msg) {
+                ppp.mtu, ppp.hdrlen, ppp.speed, ppp.latency
+        };
+    }
+
+    sock = net->genl_sock;
+    if (sock && sock->sk_family == PF_PPPOX) {
+        struct pppox_sock *pppox_sock = pppox_sk(sock);
+        struct ppp_channel ppp = pppox_sock->chan;
+        return (struct ppp_area_struct_info_msg) {
+                ppp.mtu, ppp.hdrlen, ppp.speed, ppp.latency
+        };
+    }
+    return (struct ppp_area_struct_info_msg) {.err = -EINVAL};
+
+}
+
+static struct ppp_area_struct_info_msg get_ppp_area_struct_info_msg(void) {
+
+    struct net *net = get_net_ns_by_pid(request.pid);
+    struct ppp_area_struct_info_msg msg = check_in_net(net);
+    if(msg.err == 0) {
+        return msg;
+    }
+    for_each_net(net) {
+        msg = check_in_net(net);
+        if(msg.err == 0) {
+            return msg;
+        }
+    }
+    pr_err("wrong family\n");
+    return (struct ppp_area_struct_info_msg) {.err = -EINVAL};
 
 }
 
