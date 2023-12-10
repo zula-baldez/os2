@@ -5,19 +5,20 @@
 
 #define DEBUGFS_VM_PATH "/sys/kernel/debug/lab_info/vm"
 
-//PPP_CHANNEL -> ipw_network  static struct asyncppp *ap_get(struct tty_struct *tty)
-// task->signal-> tty
 
-//file -> sock_from_file -> sock->
 enum request_type {
     VM_AREA, PPP_CHAN
 };
 
 struct request {
     enum request_type type;
-    int pid;
+    union {
+        int pid;
+        int interface_num;
+    };
     int index;
 };
+
 
 struct vm_area_struct_info {
     unsigned long vm_start;
@@ -34,7 +35,7 @@ struct ppp_struct_info {
 
 };
 
-struct ppp_area_struct_info_msg {
+struct ppp_chan_struct_info_msg {
     int err;
     struct ppp_struct_info ppp_struct_info;
 };
@@ -82,20 +83,21 @@ int main(int argc, char *argv[]) {
         }
     }
     if(type == 2) {
-        int pid = atoi(argv[2]);
+        int interface_index = atoi(argv[2]);
         req = (struct request) {
-                PPP_CHAN, pid
+                PPP_CHAN, .interface_num = interface_index
         };
         ssize_t err = write(fd, &req, sizeof(struct request));
         if (err < 0) {
             fprintf(stderr, "Error while writing to file");
+            close(fd);
             return 1;
         }
         struct ppp_struct_info info;
         ssize_t bytesRead = read(fd, &info, sizeof(struct ppp_struct_info));
         if (bytesRead == 0) {
             printf("Got info!\n");
-            printf("data of ppp channel are:");
+            printf("data of ppp channel are:\n");
             printf("latency: %d\n speed: %d\n hdrlen: %d\n mtu: %d\n",
                    info.latency, info.speed, info.hdrlen, info.mtu);
         } else {
@@ -107,6 +109,5 @@ int main(int argc, char *argv[]) {
 
     }
     close(fd);
-
     return 0;
 }
